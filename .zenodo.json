@@ -1,0 +1,9 @@
+{
+  "upload_type": "dataset",
+  "title": "kgateway nightly attached-routes measurements, July–October 2026",
+  "creators": [{"name": "Fajobi, Mayowa"}],
+  "description": "864 control-plane performance measurements extracted from the public GitHub Actions logs of the kgateway nightly load-test workflow (attached-routes suite), 25 July – 21 October 2026, across the main, v2.4.x and v2.3.x branches, two Kubernetes versions, two validation modes and 1,000- and 5,000-route scales. Accompanies the ICPE 2027 industrial paper 'From One-Off Benchmarks to Nightly Performance Gates: Control-Plane Regression Testing for a Kubernetes Gateway API Implementation'. See README.md for provenance, columns and caveats.",
+  "license": "cc-by-4.0",
+  "keywords": ["kgateway", "Gateway API", "Kubernetes", "performance testing", "continuous integration", "Envoy"],
+  "access_right": "open"
+}
