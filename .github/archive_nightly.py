@@ -35,9 +35,25 @@ RESULT = re.compile(r"--- (PASS|FAIL): TestKgateway/AttachedRoutes/TestAttachedR
 JOB = re.compile(r"Load Tests \(ref=([^,]+), .*k8s=([^)]+)\)")
 
 
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
 def gh(path, raw=False):
     out = subprocess.run(["gh", "api", path], check=True, capture_output=True, text=True).stdout
     return out if raw else json.loads(out)
+
+
+def job_log(job_id):
+    """Download one job's log. Logs contain terminal colour codes, which gh refuses to print by default."""
+    path = f"repos/{REPO}/actions/jobs/{job_id}/logs"
+    try:
+        out = subprocess.run(["gh", "api", "--allow-escape-sequences", path],
+                             check=True, capture_output=True, text=True).stdout
+    except subprocess.CalledProcessError:
+        out = subprocess.run(["curl", "-sSfL", "-H", f"Authorization: Bearer {os.environ['GH_TOKEN']}",
+                              f"https://api.github.com/{path}"],
+                             check=True, capture_output=True, text=True).stdout
+    return ANSI.sub("", out)
 
 
 def parse_log(text):
@@ -90,7 +106,7 @@ def main(out_path):
                 continue
             branch, k8s = m.groups()
             try:
-                text = gh(f"repos/{REPO}/actions/jobs/{job['id']}/logs", raw=True)
+                text = job_log(job['id'])
             except subprocess.CalledProcessError as e:
                 print(f"WARN: no log for job {job['id']} ({job['name']}): {e.stderr.strip()[:200]}")
                 continue
