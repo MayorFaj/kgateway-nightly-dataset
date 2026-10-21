@@ -9,7 +9,7 @@
 # (A B B A on even blocks, B A A B on odd blocks). Comparing A and B inside
 # the same runner cancels most runner-to-runner noise.
 #
-# Usage: put this file on the default branch of your fork, then
+# Usage: put this file on the default branch of the repository, then
 # Actions -> "A/B 14519" -> Run workflow.
 
 name: A/B 14519
@@ -38,6 +38,9 @@ env:
   INSTALL_NAMESPACE: kgateway-system
   IMAGE_REGISTRY: ghcr.io/kgateway-dev
   KGATEWAY_RUN_LOAD_TESTS: "true"
+  # -count=1 disables Go's test-result cache. Without it, every trial after the first
+  # replays the first trial's cached output (see PLAN.md, deviation 1).
+  LOAD_TEST_GO_ARGS: "-timeout=60m -count=1"
 
 jobs:
   ab:
@@ -149,6 +152,10 @@ jobs:
             log=../out/logs/block-${block}-trial-${trial}-${arm}.log
             VALIDATION_MODE="${{ inputs.validation_level }}" make run-load-tests-production > "$log" 2>&1
             rc=$?
+            if grep -q "(cached)" "$log"; then
+              echo "::error::trial ${trial} returned a cached go test result; marking invalid"
+              rc=97
+            fi
             tail -n 40 "$log"
             get() { grep -oP "$1: \K\S+" "$log" | tail -n 1; }
             echo "${block},${trial},${trial},${arm},${sha},${rc},$(get 'Setup Time \(Stopwatch\)'),$(get 'Route Ready Time'),$(get 'Teardown Time'),$(get 'Controller Restart Time'),$(get 'Post-Restart Translation Check Time'),$(get 'Total Writes'),${image}" >> "$csv"
