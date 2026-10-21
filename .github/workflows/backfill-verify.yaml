@@ -1,0 +1,56 @@
+# One-off backfill and check of the published dataset.
+#
+# Re-collects every scheduled nightly run of kgateway-dev/kgateway from 23 July 2026 whose job
+# logs still exist (GitHub keeps them about 90 days) with .github/archive_nightly.py, merges them
+# into data/nightly/kgateway_nightly_attachedroutes_live.csv, and compares the published
+# 864-row dataset with the re-collected rows. Writes data/verification/recollection-report.md.
+# Run by hand: Actions -> "Backfill and verify dataset" -> Run workflow.
+
+name: Backfill and verify dataset
+
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Re-collect runs created on or after (YYYY-MM-DD)"
+        default: "2026-07-23"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-nightly
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Re-collect nightly runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SINCE: ${{ inputs.since }}
+        run: python3 .github/archive_nightly.py data/nightly/kgateway_nightly_attachedroutes_live.csv --since "$SINCE"
+
+      - name: Compare with the published dataset
+        run: |
+          mkdir -p data/verification
+          python3 .github/verify_dataset.py kgateway_nightly_attachedroutes_dedup.csv \
+            data/nightly/kgateway_nightly_attachedroutes_live.csv data/verification/recollection-report.md
+          cat data/verification/recollection-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "Backfill nightly results from ${{ inputs.since }} and check the published dataset"
+            git push
+          fi
