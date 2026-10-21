@@ -1,0 +1,45 @@
+# Weekly archive of kgateway's nightly attached-routes load-test results.
+#
+# GitHub deletes Actions logs after about 90 days. Every Monday this workflow reads the
+# completed scheduled runs of kgateway-dev/kgateway's nightly workflow that are newer than
+# the newest run already archived, parses the load-test summaries, and commits the new rows to
+# data/nightly/kgateway_nightly_attachedroutes_live.csv (same columns as the Zenodo dataset).
+# It can also be run by hand: Actions -> "Archive nightly results" -> Run workflow.
+
+name: Archive nightly results
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"   # Mondays 07:23 UTC, after that morning's nightly run
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-nightly
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Fetch and parse new nightly runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/archive_nightly.py data/nightly/kgateway_nightly_attachedroutes_live.csv
+
+      - name: Commit new rows
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/nightly
+          if git diff --cached --quiet; then
+            echo "No new rows."
+          else
+            git commit -m "Archive kgateway nightly results up to $(tail -n 1 data/nightly/kgateway_nightly_attachedroutes_live.csv | cut -d, -f1)"
+            git push
+          fi
