@@ -111,7 +111,13 @@ def main(out_path, since_override=None):
         if str(run["id"]) in seen_runs:
             continue
         date = run["created_at"][:10]
-        jobs = gh(f"repos/{REPO}/actions/runs/{run['id']}/jobs?per_page=100")["jobs"]
+        if date < since:
+            continue                              # the API date filter is not always applied
+        try:
+            jobs = gh(f"repos/{REPO}/actions/runs/{run['id']}/jobs?per_page=100")["jobs"]
+        except subprocess.CalledProcessError as e:
+            print(f"WARN: cannot list jobs of run {run['id']} ({date}): {e.stderr.strip()[:200]}")
+            continue
         for job in jobs:
             m = JOB.match(job["name"])
             if not m or job["status"] != "completed":
