@@ -70,4 +70,10 @@ All trials are reported whatever the outcome, including a NOT CONFIRMED result. 
 
 Any change to this plan after data collection starts is listed here with its reason.
 
-- (none yet)
+- **Deviation 1 (21 October 2026, 21:45 UK time). The first run was invalid because of a workflow bug; its data is pilot-only.**
+  - **What happened:** the first run ([39666246971](https://github.com/MayorFaj/kgateway-nightly-dataset/actions/runs/39666246971), started 19:58 UTC) ran `go test` without `-count=1`. Go therefore cached the result of each block's first trial and replayed it for trials 2 to 4 (`ok ... (cached)` in the logs), even though the kgateway image had changed.
+  - **Pilot data:** only one trial per block actually ran. Those 8 first trials, on 8 different runners, are reported as pilot data and are **not** part of the confirmatory analysis. Teardown at 5,000 routes:
+    - arm A: 1.627, 1.528, 1.530 and 0.334 s;
+    - arm B: 0.231, 0.132, 0.231 and 0.230 s.
+  - **Fix:** the workflow now sets `LOAD_TEST_GO_ARGS="-timeout=60m -count=1"`, and any trial whose log contains `(cached)` is marked invalid (exit code 97). This means the existing exclusion rule in section 6 removes it.
+  - **Unchanged:** hypotheses, arms, procedure, measurements, analysis and decision rule. The confirmatory result comes from the first complete run after this fix.
