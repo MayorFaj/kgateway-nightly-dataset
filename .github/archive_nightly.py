@@ -14,7 +14,7 @@ import csv, json, os, re, subprocess, sys
 
 REPO = "kgateway-dev/kgateway"
 WORKFLOW = "nightly-tests.yaml"
-START_DATE = "2026-10-22"  # the published dataset covers runs up to 2026-10-21
+START_DATE = "2026-10-21"  # overlaps the last night of the published dataset (21 Oct) to cross-check this parser
 COLS = ["date", "run_id", "branch", "k8s", "job_result", "validation_mode", "routes",
         "setup_time", "route_ready_time", "teardown_time", "controller_restart_time",
         "post_restart_translation_time", "status_writes", "test_result"]
