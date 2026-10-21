@@ -8,7 +8,8 @@ row per (run, branch, k8s, validation mode, route scale), in the same columns as
 dataset (Zenodo DOI 10.5281/zenodo.23546846).
 
 Needs: the gh CLI and GH_TOKEN (the workflow's GITHUB_TOKEN is enough for a public repository).
-Usage:  python3 archive_nightly.py data/nightly/kgateway_nightly_attachedroutes_live.csv
+Usage:  python3 archive_nightly.py data/nightly/kgateway_nightly_attachedroutes_live.csv [--since YYYY-MM-DD]
+        --since re-reads every run from that date on (a backfill); runs already in the CSV are skipped.
 """
 import csv, json, os, re, subprocess, sys
 
@@ -85,15 +86,26 @@ def parse_log(text):
     return records
 
 
-def main(out_path):
+def list_runs(since):
+    """All completed scheduled runs created on or after `since`, following pagination."""
+    runs, page = [], 1
+    while True:
+        batch = gh(f"repos/{REPO}/actions/workflows/{WORKFLOW}/runs?event=schedule&status=completed"
+                   f"&created=%3E%3D{since}&per_page=100&page={page}")["workflow_runs"]
+        runs += batch
+        if len(batch) < 100:
+            return runs
+        page += 1
+
+
+def main(out_path, since_override=None):
     rows = []
     if os.path.exists(out_path):
         with open(out_path, newline="") as f:
             rows = list(csv.DictReader(f))
     seen_runs = {r["run_id"] for r in rows}
-    since = max([START_DATE] + [r["date"] for r in rows])
-    runs = gh(f"repos/{REPO}/actions/workflows/{WORKFLOW}/runs?event=schedule&status=completed"
-              f"&created=%3E%3D{since}&per_page=100")["workflow_runs"]
+    since = since_override or max([START_DATE] + [r["date"] for r in rows])
+    runs = list_runs(since)
     added = 0
     for run in sorted(runs, key=lambda r: r["created_at"]):
         if str(run["id"]) in seen_runs:
@@ -129,4 +141,10 @@ def main(out_path):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "data/nightly/kgateway_nightly_attachedroutes_live.csv")
+    args = sys.argv[1:]
+    since = None
+    if "--since" in args:
+        i = args.index("--since")
+        since = args[i + 1]
+        del args[i:i + 2]
+    main(args[0] if args else "data/nightly/kgateway_nightly_attachedroutes_live.csv", since)
