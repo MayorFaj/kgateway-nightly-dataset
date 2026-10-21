@@ -1,0 +1,5 @@
+block,trial,position,arm,sha,exit_code,setup_time,route_ready_time,teardown_time,controller_restart_time,post_restart_translation_time,total_writes,image
+2,1,1,a,12a81d42cba2b018922ab857c5abf4b214053515,0,10.037731472s,10.033706358s,2.347133985s,5.505299768s,5.002713125s,1,ghcr.io/kgateway-dev/kgateway:ab-a
+2,2,2,b,cf20dc590c3b920a926974848bd6fd4b05907561,0,13.038575403s,13.035223425s,226.979115ms,5.50459673s,5.006418381s,2,ghcr.io/kgateway-dev/kgateway:ab-b
+2,3,3,b,cf20dc590c3b920a926974848bd6fd4b05907561,0,10.035673493s,10.032355402s,231.481195ms,5.506354342s,5.006067993s,2,ghcr.io/kgateway-dev/kgateway:ab-b
+2,4,4,a,12a81d42cba2b018922ab857c5abf4b214053515,0,15.035793308s,15.032211703s,1.830914252s,5.503198257s,5.005866375s,2,ghcr.io/kgateway-dev/kgateway:ab-a
