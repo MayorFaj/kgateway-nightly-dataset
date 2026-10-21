@@ -1,5 +1,7 @@
 # kgateway nightly attached-routes measurements (July–October 2026)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23539157.svg)](https://doi.org/10.5281/zenodo.23539157)
+
 Dataset accompanying the ICPE 2027 industrial paper *"From One-Off Benchmarks to Nightly Performance Gates: Control-Plane Regression Testing for a Kubernetes Gateway API Implementation"* (M. Fajobi).
 
 ## Contents
@@ -29,7 +31,7 @@ The values come from the public GitHub Actions logs of the nightly workflow (`.g
 | `branch` | — | `main`, `v2.4.x`, `v2.3.x` or `v2.2.x` (July only) |
 | `k8s` | — | Kubernetes version label from the CI matrix: `min_versions` (Kubernetes v1.32.5) or `max_versions` (v1.36.1) |
 | `job_result` | — | Conclusion of the whole CI job: `success` or `failure`. A job can fail because of another suite in the same job |
-| `validation_mode` | — | `standard` or `strict` (strict only on `main` and `v2.4.x`) |
+| `validation_mode` | — | `standard` or `strict` (strict only on `main` and `v2.4.x`). `?` in two rows (v2.3.x, 10 Aug) where the log did not print the mode |
 | `routes` | count | Baseline route count: 1000 or 5000 |
 | `setup_time` | duration | "Stopwatch" time: from just before creating one extra HTTPRoute until the Gateway's `attachedRoutes` status reaches N+1. Includes the API call that creates the route. Polled every 1 s. The suite's pass/fail limit applies to this value |
 | `route_ready_time` | duration | The polling part of `setup_time` only: from the start of status polling until `attachedRoutes` reaches N+1. Always slightly smaller than `setup_time` (by the route-creation call, typically a few milliseconds) |
@@ -51,7 +53,7 @@ Empty cells mean the metric was not printed, for example restart metrics on bran
 
 ## Citation
 
-M. Fajobi. 2026. *kgateway nightly attached-routes measurements, July–October 2026.* Dataset. Zenodo. DOI: [add after archiving]
+M. Fajobi. 2026. *kgateway nightly attached-routes measurements, July–October 2026.* Dataset. Zenodo. https://doi.org/10.5281/zenodo.23539157
 
 ## Licence
 
