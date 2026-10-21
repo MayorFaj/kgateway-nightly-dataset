@@ -8,7 +8,7 @@ rows = [r for f in sorted(glob.glob(sys.argv[1] + "/**/results-block-*.csv", rec
 plt.rcParams.update({"font.size": 8, "font.family": "serif", "axes.spines.top": False, "axes.spines.right": False, "pdf.fonttype": 42})
 fig, ax = plt.subplots(figsize=(3.33, 1.75))
 style = {"a": dict(color="#555555", marker="o", s=14, label="parent (A)", dx=-0.13),
-         "b": dict(color="#1f5fa8", marker="o", s=14, label="#14519 (B)", dx=0.13)}
+         "b": dict(color="#1f5fa8", marker="^", s=18, label="#14519 (B)", dx=0.13)}
 for arm in ("a", "b"):
     st = dict(style[arm]); dx = st.pop("dx")
     pts = [(int(r["block"]) + dx, sec(r["teardown_time"])) for r in rows if r["arm"] == arm and r["exit_code"] == "0"]
