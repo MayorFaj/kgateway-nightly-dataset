@@ -1,0 +1,165 @@
+# Controlled A/B experiment: does kgateway PR #14519 reduce 5,000-route teardown time?
+#
+# Arm A = parent of #14519 (12a81d42), arm B = #14519 merge commit (cf20dc59).
+# The load-test code is identical in both commits; only product code differs.
+#
+# Design: each matrix job is one "block" on one fresh GitHub-hosted runner.
+# A block builds both arms' images, creates ONE kind cluster, and runs the
+# 5,000-route attached-routes test four times in a counterbalanced order
+# (A B B A on even blocks, B A A B on odd blocks). Comparing A and B inside
+# the same runner cancels most runner-to-runner noise.
+#
+# Usage: put this file on the default branch of your fork, then
+# Actions -> "A/B 14519" -> Run workflow.
+
+name: A/B 14519
+
+on:
+  workflow_dispatch:
+    inputs:
+      k8s_env:
+        description: "Kubernetes version set (max_versions = v1.36.1, min_versions = v1.32.5)"
+        type: choice
+        options: [max_versions, min_versions]
+        default: max_versions
+      validation_level:
+        description: "kgateway validation.level"
+        type: choice
+        options: [standard, strict]
+        default: standard
+
+permissions:
+  contents: read
+
+env:
+  A_SHA: 12a81d42cba2b018922ab857c5abf4b214053515   # parent of #14519
+  B_SHA: cf20dc590c3b920a926974848bd6fd4b05907561   # #14519 merged
+  CLUSTER_NAME: kind
+  INSTALL_NAMESPACE: kgateway-system
+  IMAGE_REGISTRY: ghcr.io/kgateway-dev
+  KGATEWAY_RUN_LOAD_TESTS: "true"
+
+jobs:
+  ab:
+    name: A/B block ${{ matrix.block }}
+    runs-on: ubuntu-22.04          # same runner image as the nightly job
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        block: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - name: Check out arm B (#14519)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          repository: kgateway-dev/kgateway
+          ref: ${{ env.B_SHA }}
+          path: b
+
+      - name: Check out arm A (parent)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          repository: kgateway-dev/kgateway
+          ref: ${{ env.A_SHA }}
+          path: a
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          docker system prune -af || true
+          df -h /
+
+      - name: Set up Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: b/go.mod
+          cache-dependency-path: |
+            a/go.sum
+            b/go.sum
+
+      - name: Record environment
+        run: |
+          mkdir -p out/logs
+          source b/.github/workflows/.env/nightly-tests/${{ inputs.k8s_env }}.env
+          echo "NODE_VERSION=${node_version}" >> "$GITHUB_ENV"
+          {
+            echo "block=${{ matrix.block }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "k8s_env=${{ inputs.k8s_env }}"
+            echo "node_version=${node_version}"
+            echo "validation_level=${{ inputs.validation_level }}"
+            echo "runner=$(uname -a)"
+            echo "cpus=$(nproc)"
+            echo "mem=$(free -g | awk '/Mem:/{print $2}')G"
+            echo "a_sha=${A_SHA}"
+            echo "b_sha=${B_SHA}"
+          } | tee out/env-block-${{ matrix.block }}.txt
+
+      - name: Create kind cluster (no image build)
+        working-directory: b
+        env:
+          SKIP_DOCKER: "true"
+          CLUSTER_NODE_VERSION: ${{ env.NODE_VERSION }}
+        run: |
+          make mod-download
+          ./hack/kind/setup-kind.sh
+
+      - name: Build and load arm A images (tag ab-a)
+        working-directory: a
+        run: |
+          make mod-download
+          VERSION=ab-a make kind-build-and-load-kgateway kind-build-and-load-envoy-wrapper kind-build-and-load-sds
+
+      - name: Build and load arm B images (tag ab-b)
+        working-directory: b
+        run: |
+          VERSION=ab-b make kind-build-and-load-kgateway kind-build-and-load-envoy-wrapper kind-build-and-load-sds
+
+      - name: Install kgateway CRDs
+        working-directory: b
+        run: |
+          go tool helm upgrade --install kgateway-crds ./install/helm/kgateway-crds/ \
+            --namespace "$INSTALL_NAMESPACE" --create-namespace --wait --timeout 5m
+
+      - name: Run counterbalanced trials
+        working-directory: b
+        run: |
+          set -uo pipefail
+          block=${{ matrix.block }}
+          if (( block % 2 == 0 )); then order="a b b a"; else order="b a a b"; fi
+          csv=../out/results-block-${block}.csv
+          echo "block,trial,position,arm,sha,exit_code,setup_time,route_ready_time,teardown_time,controller_restart_time,post_restart_translation_time,total_writes,image" > "$csv"
+          trial=0
+          for arm in $order; do
+            trial=$((trial+1))
+            sha=$([[ $arm == a ]] && echo "$A_SHA" || echo "$B_SHA")
+            echo "::group::block ${block} trial ${trial} arm ${arm}"
+            go tool helm uninstall kgateway --namespace "$INSTALL_NAMESPACE" --wait --timeout 5m || true
+            kubectl wait --for=delete pod -l app.kubernetes.io/name=kgateway -n "$INSTALL_NAMESPACE" --timeout=3m || true
+            go tool helm upgrade --install kgateway ./install/helm/kgateway/ \
+              --namespace "$INSTALL_NAMESPACE" --create-namespace \
+              --set image.tag="ab-${arm}" \
+              --set image.registry="$IMAGE_REGISTRY" \
+              --set validation.level="${{ inputs.validation_level }}" \
+              --wait --timeout 5m
+            kubectl wait --for=condition=available --timeout=5m deployment/kgateway -n "$INSTALL_NAMESPACE"
+            image=$(kubectl get deployment kgateway -n "$INSTALL_NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].image}')
+            echo "controller image: ${image}"
+            log=../out/logs/block-${block}-trial-${trial}-${arm}.log
+            VALIDATION_MODE="${{ inputs.validation_level }}" make run-load-tests-production > "$log" 2>&1
+            rc=$?
+            tail -n 40 "$log"
+            get() { grep -oP "$1: \K\S+" "$log" | tail -n 1; }
+            echo "${block},${trial},${trial},${arm},${sha},${rc},$(get 'Setup Time \(Stopwatch\)'),$(get 'Route Ready Time'),$(get 'Teardown Time'),$(get 'Controller Restart Time'),$(get 'Post-Restart Translation Check Time'),$(get 'Total Writes'),${image}" >> "$csv"
+            echo "::endgroup::"
+          done
+          cat "$csv"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ab-14519-block-${{ matrix.block }}
+          path: out/
+          retention-days: 90
