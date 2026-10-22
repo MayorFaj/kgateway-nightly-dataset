@@ -11,7 +11,7 @@ Requirements: Python 3.10+, numpy, scipy (Fisher's exact test, used only in the 
 | `analyze.py` | Branch summaries, threshold headroom, the 16 nightly series, relative gates, E-divisive and detection delay; writes `results.json` |
 | `sensitivity.py` | Relative gates for windows 3/7/14 and k 1.25/1.5/2/3; E-divisive at significance 0.01/0.05 and minimum segment 3/5; noise profile; writes `sensitivity.json` |
 | `make_teardown_fig.py` | Nightly 5,000-route teardown per branch (paper Fig. 2) |
-| `make_series_fig.py` | The 16 nightly series with change points (paper Fig. 5) |
+| `make_series_fig.py` | The 16 nightly series with change points (paper Fig. 4) |
 
 ```bash
 cd analysis/seip
