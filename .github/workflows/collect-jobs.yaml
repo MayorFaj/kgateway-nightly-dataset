@@ -1,0 +1,40 @@
+# Collect job-level metadata (conclusion, duration, failed steps) of kgateway's nightly runs.
+# Run by hand: Actions -> "Collect nightly job metadata" -> Run workflow.
+
+name: Collect nightly job metadata
+
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Runs created on or after (YYYY-MM-DD)"
+        default: "2026-07-23"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-nightly
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SINCE: ${{ inputs.since }}
+        run: python3 .github/collect_jobs.py data/nightly/kgateway_nightly_jobs.csv --since "$SINCE"
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/nightly
+          if git diff --cached --quiet; then echo "Nothing to commit."; else
+            git commit -m "Collect nightly job metadata from ${{ inputs.since }}"
+            git push
+          fi
