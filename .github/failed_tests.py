@@ -9,6 +9,17 @@ REPO = "kgateway-dev/kgateway"
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 FAIL = re.compile(r"--- FAIL: (\S+)")
 PANIC = re.compile(r"panic: (.{0,120})")
+TS = re.compile(r"^\S+Z ")
+
+
+def errors(text):
+    """testify 'Error:' and 'Messages:' lines, plus suite lines that report a failure or timeout."""
+    out = []
+    for l in (TS.sub("", x).strip() for x in text.splitlines()):
+        if l.startswith(("Error:", "Messages:")) or "timed out" in l or "deadline exceeded" in l \
+                or ("attachedroutes_suite.go" in l and re.search(r"fail|exceed|threshold", l, re.I)):
+            out.append(re.sub(r"\s+", " ", l)[:200])
+    return list(dict.fromkeys(out))[:8]
 
 
 def log(job_id):
@@ -30,13 +41,14 @@ def main(jobs_csv, out_csv):
             text = log(j["job_id"])
             fails = sorted(set(FAIL.findall(text)))
             panics = sorted(set(PANIC.findall(text)))[:3]
+            errs = errors(text)
             status = "ok"
         except subprocess.CalledProcessError:
-            fails, panics, status = [], [], "log unavailable"
+            fails, panics, errs, status = [], [], [], "log unavailable"
         rows.append({"date": j["date"], "job_id": j["job_id"], "job_name": j["job_name"], "log": status,
-                     "failed_tests": " | ".join(fails), "panics": " | ".join(panics)})
+                     "failed_tests": " | ".join(fails), "panics": " | ".join(panics), "errors": " || ".join(errs)})
     with open(out_csv, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["date", "job_id", "job_name", "log", "failed_tests", "panics"])
+        w = csv.DictWriter(f, fieldnames=["date", "job_id", "job_name", "log", "failed_tests", "panics", "errors"])
         w.writeheader()
         w.writerows(rows)
     print(f"{len(rows)} failed load-test jobs")
