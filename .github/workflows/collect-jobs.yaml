@@ -29,6 +29,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SINCE: ${{ inputs.since }}
         run: python3 .github/collect_jobs.py data/nightly/kgateway_nightly_jobs.csv --since "$SINCE"
+      - name: Failed tests in failed load-test jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/failed_tests.py data/nightly/kgateway_nightly_jobs.csv data/nightly/kgateway_nightly_loadtest_failures.csv
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
