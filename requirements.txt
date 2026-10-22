@@ -1,0 +1,6 @@
+# The collection tool (.github/archive_nightly.py, collect_jobs.py, failed_tests.py, verify_dataset.py)
+# uses only the Python standard library plus the GitHub CLI (gh).
+# The analysis and figure scripts in analysis/seip need:
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
