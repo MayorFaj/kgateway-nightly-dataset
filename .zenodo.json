@@ -8,7 +8,7 @@
       "affiliation": "Independent Researcher"
     }
   ],
-  "description": "864 control-plane performance measurements extracted from the public GitHub Actions logs of the kgateway nightly load-test workflow (attached-routes suite), 25 July - 21 October 2026, across the main, v2.4.x, v2.3.x and v2.2.x branches, two Kubernetes versions, two validation modes and 1,000- and 5,000-route scales. Includes a pre-registered controlled A/B experiment (experiments/ab-14519): 32 trials on 8 GitHub-hosted runners comparing kgateway PR #14519 with its parent commit at 5,000 routes (teardown median 1.33 s to 0.18 s, B/A 0.14, 95% CI 0.10-0.25, paired Wilcoxon p=0.0078). Version 1.2.0 adds the open-source collection tool (.github/archive_nightly.py, Apache-2.0), a re-collection check of the published rows against the original logs (data/verification), and a continuously archived CSV of all later nightly runs (data/nightly). Data: CC BY 4.0; code: Apache License 2.0. See README.md.",
+  "description": "864 control-plane performance measurements extracted from the public GitHub Actions logs of the kgateway nightly load-test workflow (attached-routes suite), 25 July - 21 October 2026, across the main, v2.4.x, v2.3.x and v2.2.x branches, two Kubernetes versions, two validation modes and 1,000- and 5,000-route scales. Includes a pre-registered controlled A/B experiment (experiments/ab-14519): 32 trials on 8 GitHub-hosted runners comparing kgateway PR #14519 with its parent commit at 5,000 routes (teardown median 1.33 s to 0.18 s, B/A 0.14, 95% CI 0.10-0.25, paired Wilcoxon p=0.0078). Version 1.2.0 adds the open-source collection tool (.github/archive_nightly.py, Apache-2.0), a re-collection check of the published rows against the original logs (data/verification), and a continuously archived CSV of all later nightly runs (data/nightly). Data: CC BY 4.0; code: Apache License 2.0. See README.md. Version 1.3.0 adds CI job metadata for every nightly run, failed-test classifications for every failed load-test job, and the analysis scripts (including an E-divisive change-point implementation) for the ICSE 2027 SEIP paper (analysis/seip).",
   "license": "cc-by-4.0",
   "keywords": [
     "kgateway",
@@ -22,5 +22,5 @@
     "mining software repositories"
   ],
   "access_right": "open",
-  "version": "1.2.0"
+  "version": "1.3.0"
 }
