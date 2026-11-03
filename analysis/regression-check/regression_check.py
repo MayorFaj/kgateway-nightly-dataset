@@ -148,65 +148,79 @@ def main(path):
                                after_median=round(float(np.median(y[i0:i0 + WINDOW])), 3))
 
     # 3. injected slowdowns
+    # A "hit" is any alarm in the HORIZON nights from the start of the slowdown. Some of those
+    # alarms would have fired anyway, so each detector is also scored on the UNMODIFIED series
+    # over the same windows ("chance"); "net" = hit rate minus chance rate.
+    def in_window(alarms, start):
+        return any(start <= i < start + HORIZON for i in alarms)
+
     for key, (ds, nl) in series.items():
         b, col, sc = key
         step, limit = STEP[col], FIXED_LIMIT.get((col, sc))
         n = len(nl)
+        y0 = medians(nl)
+        base_alarms = dict(robust=robust_gate(y0, step), naive=naive_gate(y0), fixed=fixed_gate(nl, limit))
+        base_cps = [c for c, _ in e_divisive(y0, perms=ED_PERMS, seed=0)]
         for d in SLOWDOWNS:
-            res = dict(rob_hit=0, rob_delay=[], nai_hit=0, fix_hit=0, rob_false_before=0, ed_hit=0, ed_n=0)
+            hits = dict(robust=0, naive=0, fixed=0, edivisive=0)
+            chance = dict(robust=0, naive=0, fixed=0, edivisive=0)
+            delays, ed_n = [], 0
             for t in range(TRIALS):
                 start = int(rng.integers(WINDOW + 5, n - HORIZON))
                 inj = inject(nl, start, d, step, rng)
                 y = medians(inj)
                 rob = robust_gate(y, step)
                 hit = [i for i in rob if start <= i < start + HORIZON]
-                res["rob_false_before"] += sum(1 for i in rob if i < start)
                 if hit:
-                    res["rob_hit"] += 1
-                    res["rob_delay"].append(hit[0] - start + 1)
-                if any(start <= i < start + HORIZON for i in naive_gate(y)):
-                    res["nai_hit"] += 1
-                if any(start <= i < start + HORIZON for i in fixed_gate(inj, limit)):
-                    res["fix_hit"] += 1
+                    hits["robust"] += 1
+                    delays.append(hit[0] - start + 1)
+                hits["naive"] += in_window(naive_gate(y), start)
+                hits["fixed"] += in_window(fixed_gate(inj, limit), start)
+                for k in ("robust", "naive", "fixed"):
+                    chance[k] += in_window(base_alarms[k], start)
                 if t < ED_TRIALS:   # retrospective change-point detection on the full injected series
-                    res["ed_n"] += 1
+                    ed_n += 1
                     cps = e_divisive(y, perms=ED_PERMS, seed=t)
-                    if any(abs(c - start) <= 2 for c, _ in cps):
-                        res["ed_hit"] += 1
-            out["injection"].append(dict(
-                series="|".join(key), slowdown=d,
-                robust_detect=round(res["rob_hit"] / TRIALS, 3),
-                robust_median_delay=float(np.median(res["rob_delay"])) if res["rob_delay"] else None,
-                naive_detect=round(res["nai_hit"] / TRIALS, 3),
-                fixed_detect=round(res["fix_hit"] / TRIALS, 3) if limit else None,
-                edivisive_detect=round(res["ed_hit"] / res["ed_n"], 3)))
+                    hits["edivisive"] += any(abs(c - start) <= 2 for c, _ in cps)
+                    chance["edivisive"] += any(abs(c - start) <= 2 for c in base_cps)
+            row = dict(series="|".join(key), slowdown=d,
+                       robust_median_delay=float(np.median(delays)) if delays else None)
+            for k in hits:
+                if k == "fixed" and limit is None:
+                    row[f"{k}_detect"] = row[f"{k}_chance"] = row[f"{k}_net"] = None
+                    continue
+                m = ed_n if k == "edivisive" else TRIALS
+                row[f"{k}_detect"] = round(hits[k] / m, 3)
+                row[f"{k}_chance"] = round(chance[k] / m, 3)
+                row[f"{k}_net"] = round((hits[k] - chance[k]) / m, 3)
+            out["injection"].append(row)
         print(f"{'|'.join(key)} done ({time.time() - t0:.0f}s)", flush=True)
 
     # 4. scheduled-run reliability (job metadata)
     jobs_path = os.path.join(os.path.dirname(path), "kgateway_nightly_jobs.csv")
     if os.path.exists(jobs_path):
         import csv
-        runs, lt = {}, defaultdict(lambda: [0, 0])
+        runs, lt, dates = {}, defaultdict(lambda: [0, 0]), set()
         for r in csv.DictReader(open(jobs_path)):
             runs[r["run_id"]] = r["run_conclusion"]
+            dates.add(r["date"])
             if r["job_name"].startswith("Load Tests"):
                 lt["all"][1] += 1
                 lt["all"][0] += r["job_conclusion"] == "success"
-        out["reliability"] = dict(runs=len(runs), runs_success=sum(v == "success" for v in runs.values()),
+        out["reliability"] = dict(first=min(dates), last=max(dates), runs=len(runs), runs_success=sum(v == "success" for v in runs.values()),
                                   loadtest_jobs=lt["all"][1], loadtest_success=lt["all"][0])
 
     # summary across series per slowdown
     summ = []
     for d in SLOWDOWNS:
         rows = [r for r in out["injection"] if r["slowdown"] == d]
-        fx = [r["fixed_detect"] for r in rows if r["fixed_detect"] is not None]
         dl = [r["robust_median_delay"] for r in rows if r["robust_median_delay"] is not None]
-        summ.append(dict(slowdown=d,
-                         robust=round(float(np.mean([r["robust_detect"] for r in rows])), 3),
-                         robust_delay=float(np.median(dl)) if dl else None,
-                         naive=round(float(np.mean([r["naive_detect"] for r in rows])), 3),
-                         fixed=round(float(np.mean(fx)), 3),
-                         edivisive=round(float(np.mean([r["edivisive_detect"] for r in rows])), 3)))
+        s = dict(slowdown=d, robust_delay=float(np.median(dl)) if dl else None)
+        for k in ("robust", "naive", "fixed", "edivisive"):
+            for kind in ("detect", "chance", "net"):
+                v = [r[f"{k}_{kind}"] for r in rows if r[f"{k}_{kind}"] is not None]
+                s[f"{k}_{kind}"] = round(float(np.mean(v)), 3)
+        summ.append(s)
     out["injection_summary"] = summ
     json.dump(out, open(os.path.join(HERE, "results.json"), "w"), indent=1, default=str)
     print(json.dumps(dict(backtest=out["backtest_summary"], known=out["known_change"],

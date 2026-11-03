@@ -10,31 +10,34 @@ S = D["injection_summary"]
 B = D["backtest_summary"]
 x = [int(r["slowdown"] * 100) for r in S]
 lines = [("History-aware check (proposed)", "robust", "#2a78d6", "o"),
-         ("E-divisive change points (retrospective)", "edivisive", "#eb6834", "s"),
+         ("E-divisive change points (retrospective, 40 trials)", "edivisive", "#eb6834", "s"),
          ("One-night relative gate (1.5x)", "naive", "#1baf7a", "^"),
          ("Suite's fixed pass/fail limit", "fixed", "#eda100", "D")]
 plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10})
 fig, (ax, bx) = plt.subplots(1, 2, figsize=(10.5, 4.4), dpi=200, gridspec_kw=dict(width_ratios=[2.1, 1]))
 fig.patch.set_facecolor("#fcfcfb")
 for a in (ax, bx): a.set_facecolor("#fcfcfb")
-seen=set()
+ends = []
 for label, key, c, m in lines:
-    y = [r[key] * 100 for r in S]
+    y = [max(r[key + "_net"], 0) * 100 for r in S]
     ax.plot(range(len(x)), y, color=c, lw=2, marker=m, ms=7, mec="#fcfcfb", mew=1.5, label=label)
-    if round(y[-1]) in seen: continue
-    seen.add(round(y[-1]))
-    ax.annotate(f"{y[-1]:.0f}%", (len(x) - 1, y[-1]), xytext=(8, 0), textcoords="offset points",
+    ends.append(y[-1])
+placed = []
+for v in sorted(ends, reverse=True):   # end labels, pushed apart so they never overlap
+    pos = v if not placed else min(v, placed[-1] - 5)
+    placed.append(pos)
+    ax.annotate(f"{v:.0f}%", (len(x) - 1, v), xytext=(len(x) - 1 + 0.08, pos), textcoords="data",
                 va="center", color="#0b0b0b", fontsize=9)
 ax.set_xticks(range(len(x)), [f"+{v}%" for v in x])
 ax.set_ylim(-3, 105); ax.set_xlim(-0.3, len(x) - 0.4)
 ax.set_xlabel("Size of injected persistent slowdown", color="#52514e")
-ax.set_ylabel("Slowdowns detected within 10 nights (%)", color="#52514e")
+ax.set_ylabel("Caught within 10 nights, beyond chance (%)", color="#52514e")
 ax.grid(axis="y", color="#e4e3df", lw=0.8); ax.set_axisbelow(True)
 for s in ("top", "right"): ax.spines[s].set_visible(False)
 for s in ("left", "bottom"): ax.spines[s].set_color("#c3c2b7")
 ax.tick_params(colors="#52514e")
 ax.legend(frameon=False, loc="upper left", fontsize=8.5)
-ax.set_title("A. Injected slowdowns caught (real data, 200 trials per series)", fontsize=10, loc="left", color="#0b0b0b")
+ax.set_title("A. Injected slowdowns caught, minus alarms that would fire anyway", fontsize=10, loc="left", color="#0b0b0b")
 names = ["History-aware\ncheck", "One-night\ngate (1.5x)", "Fixed\nlimit"]
 vals = [B["robust_alarms"], B["naive_alarms"], B["fixed_alarms"]]
 cols = ["#2a78d6", "#1baf7a", "#eda100"]

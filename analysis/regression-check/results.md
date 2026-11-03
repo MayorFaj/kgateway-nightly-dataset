@@ -6,7 +6,9 @@ Data: 24 July to 2 November 2026, branches main and v2.4.x, 12 series, 978 serie
 
 ## Main findings
 
-**1. The suite's fixed pass/fail limits almost never catch a slowdown.** The limits (30 s and 90 s for setup, 10 s and 20 s for teardown) sit far above normal values (setup about 12 s, teardown 0.13 to 1.8 s). A 50% slowdown was caught in 5% of trials; doubling setup time was caught in 49% of setup trials, and in none of the trials at 5,000 routes. Restart time has no limit at all. A build can be much slower and still pass.
+All detection rates below are **net of chance**: each detector is also run on the unmodified series over the same 10-night windows, and alarms that would have fired anyway are subtracted.
+
+**1. The suite's fixed pass/fail limits almost never catch a slowdown.** The limits (30 s and 90 s for setup, 10 s and 20 s for teardown) sit far above normal values (setup about 12 s, teardown 0.13 to 1.8 s). A 50% slowdown was caught in 2% of trials beyond chance; doubling setup time was caught in 49% of setup trials, and in none of the trials at 5,000 routes. Restart time has no limit at all. A build can be much slower and still pass.
 
 **2. The history-aware check raised one alarm in 978 series-nights of real data.** The one-night relative gate raised 20 and the fixed limits 2. The single alarm (v2.4.x, 1,000-route teardown, 25 and 26 October 2026: median 0.28 s against a baseline of 0.13 s) was checked against the branch's commits: the only change between 20 and 26 October was a comment-only edit, so it is a false alarm caused by the test environment. On 26 October maintainers merged "Loadtest flake mitigation" (#14907) to that branch, consistent with test instability at the time.
 
@@ -14,23 +16,24 @@ Data: 24 July to 2 November 2026, branches main and v2.4.x, 12 series, 978 serie
 
 **4. It reliably catches large slowdowns in setup and restart time, but not small ones or teardown.**
 
-| Share of injected slowdowns caught within 10 nights | +10% | +20% | +50% | +100% |
+| Injected slowdowns caught within 10 nights, net of chance | +10% | +20% | +50% | +100% |
 | --- | --- | --- | --- | --- |
 | Setup time: history-aware check | 8% | 28% | 94% | 100% |
+| Setup time: one-night gate | 0% | 1% | 75% | 100% |
 | Setup time: fixed limit | 0% | 0% | 0% | 49% |
 | Setup time: E-divisive (retrospective) | 62% | 92% | 100% | 100% |
 | Restart time: history-aware check | 13% | 24% | 85% | 100% |
-| Restart time: E-divisive (retrospective) | 30% | 71% | 100% | 100% |
-| Teardown time: history-aware check | 6% | 9% | 28% | 71% |
-| Teardown time: E-divisive (retrospective) | 1% | 6% | 76% | 99% |
+| Restart time: one-night gate | 0% | 4% | 63% | 98% |
+| Restart time: E-divisive (retrospective) | 25% | 66% | 95% | 98% |
+| Teardown time: history-aware check | 5% | 7% | 26% | 69% |
+| Teardown time: one-night gate | 12% | 27% | 53% | 64% |
+| Teardown time: E-divisive (retrospective) | 0% | 6% | 74% | 96% |
 
-When it alarms, the check does so after a median of 2 nights for slowdowns of 50% or more.
-
-The one-night gate appears to catch more teardown slowdowns (59% at +20%), but it also alarms on unmodified teardown data 19 times, so most of those "catches" are alarms that would have fired anyway.
+When it alarms, the check does so after a median of 2 nights for slowdowns of 50% or more. Its chance rate (an alarm in a random 10-night window with no slowdown) is under 1%; the one-night gate's is 12% overall and 33% on teardown, which is why its raw teardown catches look high before the correction.
 
 **5. The nightly design limits what any method can see.** Each night measures a single route change on a shared GitHub-hosted runner, and setup time is polled once per second on a value of about 12 s, so one polling step is already an 8% change. Teardown varies by 25% to 120% from night to night. Under these conditions, slowdowns below about 20% cannot be separated from noise night by night. The controlled A/B experiment in `experiments/ab-14519/` shows the remedy: with 16 repeated trials per arm it confirmed the PR #14519 effect with a 95% interval of 0.10 to 0.25 for the ratio.
 
-**6. Scheduled-run reliability.** Of 90 nightly workflow runs from 23 July, 32 (36%) completed with every job successful; 504 of 540 load-test jobs (93%) succeeded.
+**6. Scheduled-run reliability.** Of 90 nightly workflow runs from 23 July to 22 October 2026 (the period covered by the job metadata), 32 (36%) completed with every job successful; 504 of 540 load-test jobs (93%) succeeded.
 
 ## What this means for the next stage
 
